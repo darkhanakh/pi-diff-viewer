@@ -1,20 +1,15 @@
 <script lang="ts">
-	import type { Annotation } from "$lib/types";
+	import { getAnnotations, removeAnnotation } from "$lib/annotations.svelte";
 	import { getBasename } from "$lib/file-icons";
 	import FileIcon from "./FileIcon.svelte";
 	import { Badge } from "$lib/components/ui/badge/index.js";
-	import { Button } from "$lib/components/ui/button/index.js";
 	import { Separator } from "$lib/components/ui/separator/index.js";
 
-	type Props = {
-		annotations: Annotation[];
-		onRemove: (id: string) => void;
-	};
-	let { annotations, onRemove }: Props = $props();
+	const store = getAnnotations();
 
 	const grouped = $derived.by(() => {
-		const map = new Map<string, Annotation[]>();
-		for (const a of annotations) {
+		const map = new Map<string, typeof store.list>();
+		for (const a of store.list) {
 			const list = map.get(a.file) ?? [];
 			list.push(a);
 			map.set(a.file, list);
@@ -28,11 +23,10 @@
 	}
 </script>
 
-{#if annotations.length > 0}
+{#if store.count > 0}
 	<div class="flex flex-col gap-3">
 		<h3 class="text-foreground text-sm font-medium">
-			Annotations
-			<span class="text-muted-foreground ml-1 text-xs">({annotations.length})</span>
+			Annotations <span class="text-muted-foreground ml-1 text-xs">({store.count})</span>
 		</h3>
 
 		{#each [...grouped.entries()] as [file, anns] (file)}
@@ -47,21 +41,17 @@
 				</button>
 
 				{#each anns.sort((a, b) => a.startLine - b.startLine) as annotation (annotation.id)}
-					<div role="button" tabindex="0"
-						class="bg-muted/40 hover:bg-muted/70 group flex w-full items-start gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors"
+					<div
+						role="button"
+						tabindex="0"
+						class="bg-muted/40 hover:bg-muted/70 group flex w-full cursor-pointer items-start gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors"
 						onclick={() => scrollToFile(annotation.file)}
+						onkeydown={(e) => { if (e.key === "Enter") scrollToFile(annotation.file); }}
 					>
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-1.5">
-								<Badge variant="outline" class="h-4 px-1 font-mono text-[10px]">
-									L{annotation.startLine}
-								</Badge>
-								<Badge
-									variant="outline"
-									class="h-4 px-1 text-[10px] {annotation.side === 'additions'
-										? 'border-green-500/30 text-green-400'
-										: 'border-red-500/30 text-red-400'}"
-								>
+								<Badge variant="outline" class="h-4 px-1 font-mono text-[10px]">L{annotation.startLine}</Badge>
+								<Badge variant="outline" class="h-4 px-1 text-[10px] {annotation.side === 'additions' ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}">
 									{annotation.side === "additions" ? "+" : "−"}
 								</Badge>
 							</div>
@@ -69,7 +59,7 @@
 						</div>
 						<button
 							class="text-muted-foreground hover:text-destructive shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-							onclick={(e) => { e.stopPropagation(); onRemove(annotation.id); }}
+							onclick={(e) => { e.stopPropagation(); removeAnnotation(annotation.id); }}
 							aria-label="Remove annotation"
 						>
 							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -79,7 +69,6 @@
 					</div>
 				{/each}
 			</div>
-
 			<Separator class="last:hidden" />
 		{/each}
 	</div>

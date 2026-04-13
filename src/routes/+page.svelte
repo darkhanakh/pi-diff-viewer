@@ -4,29 +4,22 @@
 	import AnnotationList from "$lib/components/AnnotationList.svelte";
 	import ChangesSidebar from "$lib/components/ChangesSidebar.svelte";
 	import { connect, disconnect, getState, submitReview } from "$lib/ws.svelte";
+	import { getAnnotations, resetAnnotations } from "$lib/annotations.svelte";
 	import { Button } from "$lib/components/ui/button/index.js";
 	import { Separator } from "$lib/components/ui/separator/index.js";
-	import { type Annotation, formatAnnotationsAsPrompt } from "$lib/types";
+	import { formatAnnotationsAsPrompt } from "$lib/types";
 
 	const wsState = getState();
-	let annotations = $state<Annotation[]>([]);
+	const store = getAnnotations();
 	let copied = $state(false);
 
-	function handleAnnotationAdd(annotation: Annotation) {
-		annotations = [...annotations, annotation];
-	}
-
-	function handleAnnotationRemove(id: string) {
-		annotations = annotations.filter((a) => a.id !== id);
-	}
-
 	function handleSendToPi() {
-		if (annotations.length === 0) return;
-		submitReview(annotations);
+		if (store.count === 0) return;
+		submitReview(store.list);
 	}
 
 	async function handleCopyPrompt() {
-		const prompt = formatAnnotationsAsPrompt(annotations);
+		const prompt = formatAnnotationsAsPrompt(store.list);
 		if (!prompt) return;
 		await navigator.clipboard.writeText(prompt);
 		copied = true;
@@ -38,7 +31,7 @@
 		el?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
-	onMount(connect);
+	onMount(() => { resetAnnotations(); connect(); });
 	onDestroy(disconnect);
 </script>
 
@@ -65,7 +58,7 @@
 			{/if}
 		</div>
 		<div class="flex items-center gap-2">
-			<Button variant="outline" size="sm" onclick={handleCopyPrompt} disabled={annotations.length === 0} class="text-xs">
+			<Button variant="outline" size="sm" onclick={handleCopyPrompt} disabled={store.count === 0} class="text-xs">
 				{#if copied}
 					<svg class="mr-1.5 h-3 w-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
 					Copied
@@ -74,9 +67,9 @@
 					Copy Prompt
 				{/if}
 			</Button>
-			<Button size="sm" onclick={handleSendToPi} disabled={annotations.length === 0} class="bg-emerald-600 text-xs text-white hover:bg-emerald-500">
+			<Button size="sm" onclick={handleSendToPi} disabled={store.count === 0} class="bg-emerald-600 text-xs text-white hover:bg-emerald-500">
 				<svg class="mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
-				Send to Pi{annotations.length > 0 ? ` (${annotations.length})` : ""}
+				Send to Pi{store.count > 0 ? ` (${store.count})` : ""}
 			</Button>
 		</div>
 	</header>
@@ -84,9 +77,7 @@
 	<div class="flex min-h-0 flex-1">
 		<main class="flex-1 overflow-y-auto">
 			{#if wsState.error}
-				<div class="flex h-full items-center justify-center">
-					<p class="text-destructive text-sm">{wsState.error}</p>
-				</div>
+				<div class="flex h-full items-center justify-center"><p class="text-destructive text-sm">{wsState.error}</p></div>
 			{:else if !wsState.diffPayload}
 				<div class="flex h-full items-center justify-center">
 					<div class="flex flex-col items-center gap-3">
@@ -95,19 +86,12 @@
 					</div>
 				</div>
 			{:else if wsState.diffPayload.files.length === 0}
-				<div class="flex h-full items-center justify-center">
-					<p class="text-muted-foreground text-sm">No changes to review</p>
-				</div>
+				<div class="flex h-full items-center justify-center"><p class="text-muted-foreground text-sm">No changes to review</p></div>
 			{:else}
 				<div class="space-y-3 p-4">
 					{#each wsState.diffPayload.files as file (file.name)}
 						<div id="file-{file.name}">
-							<DiffViewer
-								{file}
-								{annotations}
-								onAnnotationAdd={handleAnnotationAdd}
-								onAnnotationRemove={handleAnnotationRemove}
-							/>
+							<DiffViewer {file} />
 						</div>
 					{/each}
 				</div>
@@ -119,7 +103,7 @@
 				<ChangesSidebar files={wsState.diffPayload.files} onFileClick={scrollToFile} />
 				<Separator class="my-4" />
 			{/if}
-			<AnnotationList {annotations} onRemove={handleAnnotationRemove} />
+			<AnnotationList />
 		</aside>
 	</div>
 </div>
