@@ -6,36 +6,17 @@
 	import { connect, disconnect, getState, submitReview } from "$lib/ws.svelte";
 	import { Button } from "$lib/components/ui/button/index.js";
 	import { Separator } from "$lib/components/ui/separator/index.js";
-	import { type Annotation, type PendingAnnotation, formatAnnotationsAsPrompt } from "$lib/types";
+	import { type Annotation, formatAnnotationsAsPrompt } from "$lib/types";
 
 	const wsState = getState();
 	let annotations = $state<Annotation[]>([]);
-	let pending = $state<PendingAnnotation | null>(null);
 	let copied = $state(false);
 
-	function handleRequestAnnotation(
-		file: string,
-		side: "additions" | "deletions",
-		startLine: number,
-		endLine: number,
-	) {
-		pending = { id: crypto.randomUUID(), file, side, startLine, endLine };
+	function handleAnnotationAdd(annotation: Annotation) {
+		annotations = [...annotations, annotation];
 	}
 
-	function handleSubmitAnnotation(id: string, comment: string) {
-		if (!pending) return;
-		annotations = [
-			...annotations,
-			{ id, file: pending.file, side: pending.side, startLine: pending.startLine, endLine: pending.endLine, comment },
-		];
-		pending = null;
-	}
-
-	function handleCancelAnnotation() {
-		pending = null;
-	}
-
-	function handleRemoveAnnotation(id: string) {
+	function handleAnnotationRemove(id: string) {
 		annotations = annotations.filter((a) => a.id !== id);
 	}
 
@@ -62,7 +43,6 @@
 </script>
 
 <div class="bg-background flex h-screen flex-col">
-	<!-- Header -->
 	<header class="border-border bg-card/80 flex items-center justify-between border-b px-4 py-2 backdrop-blur">
 		<div class="flex items-center gap-3">
 			<h1 class="text-foreground/90 text-sm font-semibold tracking-tight">pi review</h1>
@@ -84,15 +64,8 @@
 				</span>
 			{/if}
 		</div>
-
 		<div class="flex items-center gap-2">
-			<Button
-				variant="outline"
-				size="sm"
-				onclick={handleCopyPrompt}
-				disabled={annotations.length === 0}
-				class="text-xs"
-			>
+			<Button variant="outline" size="sm" onclick={handleCopyPrompt} disabled={annotations.length === 0} class="text-xs">
 				{#if copied}
 					<svg class="mr-1.5 h-3 w-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
 					Copied
@@ -101,20 +74,13 @@
 					Copy Prompt
 				{/if}
 			</Button>
-
-			<Button
-				size="sm"
-				onclick={handleSendToPi}
-				disabled={annotations.length === 0}
-				class="bg-emerald-600 text-xs text-white hover:bg-emerald-500"
-			>
+			<Button size="sm" onclick={handleSendToPi} disabled={annotations.length === 0} class="bg-emerald-600 text-xs text-white hover:bg-emerald-500">
 				<svg class="mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
 				Send to Pi{annotations.length > 0 ? ` (${annotations.length})` : ""}
 			</Button>
 		</div>
 	</header>
 
-	<!-- Main -->
 	<div class="flex min-h-0 flex-1">
 		<main class="flex-1 overflow-y-auto">
 			{#if wsState.error}
@@ -139,11 +105,8 @@
 							<DiffViewer
 								{file}
 								{annotations}
-								{pending}
-								onRequestAnnotation={handleRequestAnnotation}
-								onSubmitAnnotation={handleSubmitAnnotation}
-								onCancelAnnotation={handleCancelAnnotation}
-								onRemoveAnnotation={handleRemoveAnnotation}
+								onAnnotationAdd={handleAnnotationAdd}
+								onAnnotationRemove={handleAnnotationRemove}
 							/>
 						</div>
 					{/each}
@@ -151,13 +114,12 @@
 			{/if}
 		</main>
 
-		<!-- Sidebar -->
 		<aside class="border-border bg-card hidden w-64 shrink-0 overflow-y-auto border-l p-4 xl:block">
 			{#if wsState.diffPayload}
 				<ChangesSidebar files={wsState.diffPayload.files} onFileClick={scrollToFile} />
 				<Separator class="my-4" />
 			{/if}
-			<AnnotationList {annotations} onRemove={handleRemoveAnnotation} />
+			<AnnotationList {annotations} onRemove={handleAnnotationRemove} />
 		</aside>
 	</div>
 </div>
