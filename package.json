@@ -2,9 +2,13 @@
 	"name": "pi-diff-viewer",
 	"version": "0.0.1",
 	"type": "module",
-	"keywords": ["pi-package"],
+	"keywords": [
+		"pi-package"
+	],
 	"pi": {
-		"extensions": ["./extensions"]
+		"extensions": [
+			"./extensions"
+		]
 	},
 	"scripts": {
 		"dev": "vite dev",
@@ -19,6 +23,7 @@
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
 		"@eslint/js": "^10.0.1",
+		"@internationalized/date": "^3.12.0",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.57.0",
@@ -28,6 +33,7 @@
 		"@tailwindcss/vite": "^4.2.2",
 		"@types/node": "^22",
 		"@types/ws": "^8.18.1",
+		"bits-ui": "^2.17.3",
 		"eslint": "^10.2.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.17.0",
@@ -37,6 +43,7 @@
 		"prettier-plugin-tailwindcss": "^0.7.2",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
+		"tailwind-variants": "^3.2.2",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.2",
 		"typescript-eslint": "^8.58.1",
@@ -44,6 +51,8 @@
 	},
 	"dependencies": {
 		"@pierre/diffs": "^1.1.15",
+		"clsx": "^2.1.1",
+		"tailwind-merge": "^3.5.0",
 		"ws": "^8.20.0"
 	}
 }

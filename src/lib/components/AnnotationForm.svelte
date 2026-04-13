@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { Button } from "$lib/components/ui/button/index.js";
+	import { Textarea } from "$lib/components/ui/textarea/index.js";
+	import { Badge } from "$lib/components/ui/badge/index.js";
+
 	type Props = {
 		file: string;
 		side: "additions" | "deletions";
@@ -10,7 +14,7 @@
 	let { file, side, startLine, endLine, onSubmit, onCancel }: Props = $props();
 
 	let comment = $state("");
-	let textareaEl: HTMLTextAreaElement;
+	let textareaEl: HTMLTextAreaElement | undefined = $state();
 
 	function handleSubmit() {
 		const trimmed = comment.trim();
@@ -34,48 +38,48 @@
 		textareaEl?.focus();
 	});
 
-	const lineLabel = $derived(startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`);
-	const sideLabel = $derived(side === "additions" ? "new" : "old");
+	const lineLabel = $derived(
+		startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`,
+	);
 </script>
 
-<div class="border-neutral-700 bg-neutral-800/90 fixed right-6 bottom-24 z-50 w-96 rounded-lg border shadow-2xl backdrop-blur">
-	<div class="border-neutral-700 flex items-center justify-between border-b px-4 py-2">
-		<div class="flex items-center gap-2 text-sm">
-			<span class="rounded bg-blue-500/20 px-1.5 py-0.5 font-mono text-xs text-blue-400">{file}</span>
-			<span class="text-neutral-400">{lineLabel}</span>
-			<span class="text-neutral-500">({sideLabel})</span>
-		</div>
-		<button onclick={onCancel} class="text-neutral-400 transition-colors hover:text-white">
-			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+<div class="bg-card border-border fixed right-6 bottom-20 z-50 w-[420px] rounded-lg border shadow-2xl">
+	<div class="border-border flex items-center gap-2 border-b px-4 py-2.5">
+		<span class="text-muted-foreground text-xs font-medium">Add comment</span>
+		<Badge variant="outline" class="font-mono text-[11px]">{file}</Badge>
+		<Badge variant="secondary" class="text-[11px]">{lineLabel}</Badge>
+		<Badge
+			variant="outline"
+			class="text-[11px] {side === 'additions'
+				? 'border-green-500/30 bg-green-500/10 text-green-400'
+				: 'border-red-500/30 bg-red-500/10 text-red-400'}"
+		>
+			{side === "additions" ? "new" : "old"}
+		</Badge>
+		<button
+			onclick={onCancel}
+			aria-label="Close"
+			class="text-muted-foreground hover:text-foreground ml-auto transition-colors"
+		>
+			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 			</svg>
 		</button>
 	</div>
 	<div class="p-3">
-		<textarea
-			bind:this={textareaEl}
+		<Textarea
+			bind:ref={textareaEl}
 			bind:value={comment}
 			onkeydown={handleKeydown}
 			placeholder="Write your annotation..."
-			rows="3"
-			class="border-neutral-600 bg-neutral-900 text-neutral-100 placeholder-neutral-500 focus:border-blue-500 w-full resize-none rounded border p-2 text-sm focus:outline-none"
-		></textarea>
-		<div class="mt-2 flex items-center justify-between">
-			<span class="text-neutral-500 text-xs">⌘+Enter to submit · Esc to cancel</span>
+			rows={3}
+			class="bg-background resize-none text-sm"
+		/>
+		<div class="mt-2.5 flex items-center justify-between">
+			<span class="text-muted-foreground text-[11px]">⌘↵ submit · esc cancel</span>
 			<div class="flex gap-2">
-				<button
-					onclick={onCancel}
-					class="text-neutral-400 hover:bg-neutral-700 rounded px-3 py-1 text-sm transition-colors"
-				>
-					Cancel
-				</button>
-				<button
-					onclick={handleSubmit}
-					disabled={!comment.trim()}
-					class="rounded bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-500 disabled:opacity-40"
-				>
-					Add
-				</button>
+				<Button variant="ghost" size="sm" onclick={onCancel}>Cancel</Button>
+				<Button size="sm" onclick={handleSubmit} disabled={!comment.trim()}>Add</Button>
 			</div>
 		</div>
 	</div>

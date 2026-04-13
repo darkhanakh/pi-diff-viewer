@@ -8,4 +8,6 @@
 	<title>pi review</title>
 </svelte:head>
 
-{@render children()}
+<div class="dark">
+	{@render children()}
+</div>
