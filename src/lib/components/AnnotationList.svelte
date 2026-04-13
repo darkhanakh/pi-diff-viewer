@@ -23,7 +23,7 @@
 	});
 
 	function scrollToFile(fileName: string) {
-		const el = document.getElementById(`file-${CSS.escape(fileName)}`);
+		const el = document.getElementById(`file-${fileName}`);
 		el?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 </script>

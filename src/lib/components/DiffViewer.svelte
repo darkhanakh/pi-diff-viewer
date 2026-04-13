@@ -142,11 +142,17 @@
 		});
 	}
 
+	// Track annotation changes and sync to @pierre/diffs
+	let lastAnnotationIds = "";
 	$effect(() => {
 		if (!instance) return;
-		void fileAnnotations;
+		const ids = fileAnnotations.map((a) => a.id).join(",");
+		if (ids === lastAnnotationIds) return;
+		lastAnnotationIds = ids;
 		instance.setLineAnnotations(buildLineAnnotations());
 		instance.rerender();
+		// Re-wire click handlers since rerender recreates shadow DOM
+		requestAnimationFrame(() => wireClickHandlers());
 	});
 
 	onMount(() => {
