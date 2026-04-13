@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, extname, resolve, dirname } from "node:path";
@@ -39,78 +38,93 @@ interface DiffPayload {
 	}>;
 }
 
-function getGitDiffs(cwd: string, args: string): DiffPayload {
-	const files: DiffPayload["files"] = [];
-	const trimmedArgs = args.trim();
+/** Get the git repo root directory */
+function getRepoRoot(cwd: string): string {
+	return execSync("git rev-parse --show-toplevel", { cwd, encoding: "utf-8" }).trim();
+}
 
-	if (trimmedArgs === "--staged") {
-		// Staged changes
-		const patch = execSync("git diff --cached", { cwd, encoding: "utf-8" });
-		return parsePatchToFiles(cwd, patch);
-	} else if (trimmedArgs && !trimmedArgs.startsWith("-")) {
-		// Specific file path(s)
-		const paths = trimmedArgs.split(/\s+/);
-		for (const p of paths) {
-			const fullPath = resolve(cwd, p);
-			if (!existsSync(fullPath)) continue;
-
-			try {
-				const oldContents = execSync(`git show HEAD:${p}`, {
-					cwd,
-					encoding: "utf-8",
-				});
-				const newContents = readFileSync(fullPath, "utf-8");
-				if (oldContents !== newContents) {
-					files.push({ name: p, oldContents, newContents });
-				}
-			} catch {
-				// New file (not in git yet)
-				const newContents = readFileSync(fullPath, "utf-8");
-				files.push({ name: p, oldContents: "", newContents });
-			}
-		}
-		return { type: "diff-data", files };
-	} else {
-		// Default: working tree changes
-		const patch = execSync("git diff", { cwd, encoding: "utf-8" });
-		return parsePatchToFiles(cwd, patch);
+/** Read file from git at a given ref, returns empty string if not found */
+function gitShow(cwd: string, ref: string, filePath: string): string {
+	try {
+		return execSync(`git show ${ref}:${filePath}`, {
+			cwd,
+			encoding: "utf-8",
+			maxBuffer: 10 * 1024 * 1024,
+		});
+	} catch {
+		return "";
 	}
 }
 
-function parsePatchToFiles(cwd: string, patch: string): DiffPayload {
-	const files: DiffPayload["files"] = [];
-	if (!patch.trim()) return { type: "diff-data", files };
+/** Read file from disk, returns empty string if not found */
+function readFromDisk(filePath: string): string {
+	try {
+		if (existsSync(filePath)) return readFileSync(filePath, "utf-8");
+	} catch {
+		/* binary or inaccessible */
+	}
+	return "";
+}
 
-	// Get list of changed files from git
-	const changedFiles = execSync("git diff --name-only", {
-		cwd,
-		encoding: "utf-8",
-	})
+function getGitDiffs(cwd: string, args: string): DiffPayload {
+	const trimmedArgs = args.trim();
+	const repoRoot = getRepoRoot(cwd);
+
+	if (trimmedArgs === "--staged") {
+		return getDiffFiles(repoRoot, "--cached");
+	} else if (trimmedArgs && !trimmedArgs.startsWith("-")) {
+		// Specific file paths — resolve relative to cwd then make relative to repo root
+		return getSpecificFiles(cwd, repoRoot, trimmedArgs.split(/\s+/));
+	} else {
+		return getDiffFiles(repoRoot, "");
+	}
+}
+
+/** Get diffs using git diff with the given flags (e.g. "" or "--cached") */
+function getDiffFiles(repoRoot: string, diffFlags: string): DiffPayload {
+	const files: DiffPayload["files"] = [];
+
+	const cmd = `git diff ${diffFlags} --name-only`.trim();
+	const changedFiles = execSync(cmd, { cwd: repoRoot, encoding: "utf-8" })
 		.trim()
 		.split("\n")
 		.filter(Boolean);
 
-	for (const file of changedFiles) {
-		try {
-			let oldContents = "";
-			try {
-				oldContents = execSync(`git show HEAD:${file}`, {
-					cwd,
-					encoding: "utf-8",
-				});
-			} catch {
-				// New file
-			}
-			const fullPath = resolve(cwd, file);
-			const newContents = existsSync(fullPath)
-				? readFileSync(fullPath, "utf-8")
-				: "";
-			if (oldContents !== newContents) {
-				files.push({ name: file, oldContents, newContents });
-			}
-		} catch {
-			// Skip binary or inaccessible files
-		}
+	for (const relPath of changedFiles) {
+		const absPath = resolve(repoRoot, relPath);
+		const oldContents = gitShow(repoRoot, "HEAD", relPath);
+		const newContents = diffFlags === "--cached"
+			? gitShow(repoRoot, ":", relPath) // staged version from index
+			: readFromDisk(absPath);           // working tree version
+
+		if (oldContents === newContents) continue;
+		// Skip binary files (simple heuristic)
+		if (oldContents.includes("\0") || newContents.includes("\0")) continue;
+
+		files.push({ name: relPath, oldContents, newContents });
+	}
+
+	return { type: "diff-data", files };
+}
+
+/** Get diffs for specific file paths */
+function getSpecificFiles(cwd: string, repoRoot: string, paths: string[]): DiffPayload {
+	const files: DiffPayload["files"] = [];
+
+	for (const p of paths) {
+		const absPath = resolve(cwd, p);
+		// Make path relative to repo root for git operations
+		const relPath = absPath.startsWith(repoRoot)
+			? absPath.slice(repoRoot.length + 1)
+			: p;
+
+		const oldContents = gitShow(repoRoot, "HEAD", relPath);
+		const newContents = readFromDisk(absPath);
+
+		if (oldContents === newContents) continue;
+		if (oldContents.includes("\0") || newContents.includes("\0")) continue;
+
+		files.push({ name: relPath, oldContents, newContents });
 	}
 
 	return { type: "diff-data", files };
@@ -121,14 +135,13 @@ function formatAnnotationsAsPrompt(annotations: Annotation[]): string {
 
 	const grouped = new Map<string, Annotation[]>();
 	for (const a of annotations) {
-		const existing = grouped.get(a.file) ?? [];
-		existing.push(a);
-		grouped.set(a.file, existing);
+		const list = grouped.get(a.file) ?? [];
+		list.push(a);
+		grouped.set(a.file, list);
 	}
 
 	let prompt = "## Code Review Annotations\n\n";
-	prompt +=
-		"I've reviewed the code changes and have the following annotations. Please address each one:\n\n";
+	prompt += "I've reviewed the code changes and have the following annotations. Please address each one:\n\n";
 
 	for (const [file, anns] of grouped) {
 		for (const a of anns.sort((x, y) => x.startLine - y.startLine)) {
@@ -152,9 +165,7 @@ export default function (pi: ExtensionAPI) {
 
 	function shutdownServer() {
 		if (activeWss) {
-			for (const client of activeWss.clients) {
-				client.close();
-			}
+			for (const client of activeWss.clients) client.close();
 			activeWss.close();
 			activeWss = null;
 		}
@@ -164,9 +175,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	pi.on("session_shutdown", async () => {
-		shutdownServer();
-	});
+	pi.on("session_shutdown", async () => shutdownServer());
 
 	pi.registerCommand("review", {
 		description: "Open diff review GUI to annotate code changes",
@@ -178,7 +187,6 @@ export default function (pi: ExtensionAPI) {
 
 			shutdownServer();
 
-			// Get diff data
 			let diffData: DiffPayload;
 			try {
 				diffData = getGitDiffs(ctx.cwd, args);
@@ -192,45 +200,29 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// Resolve build directory
 			const buildDir = join(PACKAGE_ROOT, "build");
 			if (!existsSync(buildDir)) {
-				ctx.ui.notify(
-					"Web UI not built. Run `pnpm build` in the package directory first.",
-					"error",
-				);
+				ctx.ui.notify("Web UI not built. Run `pnpm build` in the package directory first.", "error");
 				return;
 			}
 
-			// Start HTTP + WebSocket server
 			const server = createServer((req, res) => {
-				const url = new URL(req.url ?? "/", `http://localhost`);
+				const url = new URL(req.url ?? "/", "http://localhost");
 				let filePath = join(buildDir, url.pathname);
 
-				// SPA fallback
-				if (
-					!existsSync(filePath) ||
-					(statSync(filePath).isDirectory() && !existsSync(join(filePath, "index.html")))
-				) {
+				if (!existsSync(filePath) || (statSync(filePath).isDirectory() && !existsSync(join(filePath, "index.html")))) {
 					filePath = join(buildDir, "index.html");
 				} else if (statSync(filePath).isDirectory()) {
 					filePath = join(filePath, "index.html");
 				}
 
-				if (!existsSync(filePath)) {
-					res.writeHead(404);
-					res.end("Not found");
-					return;
-				}
+				if (!existsSync(filePath)) { res.writeHead(404); res.end("Not found"); return; }
 
-				const ext = extname(filePath);
-				const mime = MIME_TYPES[ext] ?? "application/octet-stream";
-				const content = readFileSync(filePath);
 				res.writeHead(200, {
-					"Content-Type": mime,
+					"Content-Type": MIME_TYPES[extname(filePath)] ?? "application/octet-stream",
 					"Cache-Control": "no-cache",
 				});
-				res.end(content);
+				res.end(readFileSync(filePath));
 			});
 
 			const wss = new WebSocketServer({ server });
@@ -238,7 +230,6 @@ export default function (pi: ExtensionAPI) {
 			activeWss = wss;
 
 			wss.on("connection", (ws) => {
-				// Send diff data to client
 				ws.send(JSON.stringify(diffData));
 
 				ws.on("message", (data) => {
@@ -249,50 +240,30 @@ export default function (pi: ExtensionAPI) {
 							const prompt = formatAnnotationsAsPrompt(annotations);
 							if (prompt) {
 								pi.sendUserMessage(prompt);
-								ctx.ui.notify(
-									`Review submitted with ${annotations.length} annotation(s)`,
-									"success",
-								);
-							} else {
-								ctx.ui.notify("No annotations to submit", "info");
+								ctx.ui.notify(`Review submitted with ${annotations.length} annotation(s)`, "success");
 							}
 							shutdownServer();
 						}
-					} catch {
-						// Ignore malformed messages
-					}
+					} catch { /* ignore */ }
 				});
 			});
 
-			// Find available port and start
-			await new Promise<void>((resolve) => {
-				server.listen(0, "127.0.0.1", () => resolve());
-			});
-
+			await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
 			const addr = server.address();
 			const port = typeof addr === "object" && addr ? addr.port : 0;
 			const url = `http://127.0.0.1:${port}`;
 
-			ctx.ui.notify(`Review UI opened at ${url}`, "info");
-			ctx.ui.setStatus("diff-review", `📝 Review open at ${url}`);
+			ctx.ui.notify(`Review UI → ${url}`, "info");
+			ctx.ui.setStatus("diff-review", `📝 Review: ${url}`);
 
-			// Open browser
 			try {
-				const openCmd =
-					process.platform === "darwin"
-						? "open"
-						: process.platform === "win32"
-							? "start"
-							: "xdg-open";
-				execSync(`${openCmd} ${url}`);
+				const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+				execSync(`${cmd} ${url}`);
 			} catch {
 				ctx.ui.notify(`Open ${url} in your browser`, "info");
 			}
 
-			// Clean up status when server closes
-			server.on("close", () => {
-				ctx.ui.setStatus("diff-review", undefined);
-			});
+			server.on("close", () => ctx.ui.setStatus("diff-review", undefined));
 		},
 	});
 }

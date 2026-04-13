@@ -26,14 +26,7 @@
 		if (!pending) return;
 		annotations = [
 			...annotations,
-			{
-				id,
-				file: pending.file,
-				side: pending.side,
-				startLine: pending.startLine,
-				endLine: pending.endLine,
-				comment,
-			},
+			{ id, file: pending.file, side: pending.side, startLine: pending.startLine, endLine: pending.endLine, comment },
 		];
 		pending = null;
 	}
@@ -60,7 +53,7 @@
 	}
 
 	function scrollToFile(fileName: string) {
-		const el = document.getElementById(`file-${fileName}`);
+		const el = document.getElementById(`file-${CSS.escape(fileName)}`);
 		el?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
@@ -70,96 +63,77 @@
 
 <div class="bg-background flex h-screen flex-col">
 	<!-- Header -->
-	<header class="border-border bg-card flex items-center justify-between border-b px-4 py-2">
+	<header class="border-border bg-card/80 flex items-center justify-between border-b px-4 py-2 backdrop-blur">
 		<div class="flex items-center gap-3">
-			<div class="flex items-center gap-2">
-				<svg class="text-primary h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-				</svg>
-				<h1 class="text-foreground text-sm font-semibold">pi review</h1>
-			</div>
+			<h1 class="text-foreground/90 text-sm font-semibold tracking-tight">pi review</h1>
 			<Separator orientation="vertical" class="!h-4" />
 			{#if wsState.connected}
-				<span class="flex items-center gap-1.5 text-xs text-green-400">
-					<span class="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>
+				<span class="flex items-center gap-1.5 text-xs text-emerald-400">
+					<span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
 					connected
 				</span>
 			{:else}
-				<span class="flex items-center gap-1.5 text-xs text-red-400">
-					<span class="inline-block h-1.5 w-1.5 rounded-full bg-red-400"></span>
+				<span class="text-muted-foreground flex items-center gap-1.5 text-xs">
+					<span class="bg-muted-foreground inline-block h-1.5 w-1.5 rounded-full"></span>
 					disconnected
 				</span>
 			{/if}
 			{#if wsState.diffPayload}
 				<span class="text-muted-foreground text-xs">
-					{wsState.diffPayload.files.length} file{wsState.diffPayload.files.length !== 1 ? "s" : ""} changed
+					{wsState.diffPayload.files.length} file{wsState.diffPayload.files.length !== 1 ? "s" : ""}
 				</span>
 			{/if}
 		</div>
 
-		<!-- Action buttons -->
 		<div class="flex items-center gap-2">
-			<!-- Copy Prompt -->
 			<Button
 				variant="outline"
 				size="sm"
 				onclick={handleCopyPrompt}
 				disabled={annotations.length === 0}
+				class="text-xs"
 			>
 				{#if copied}
-					<svg class="mr-1 h-3.5 w-3.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-					</svg>
-					Copied!
+					<svg class="mr-1.5 h-3 w-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+					Copied
 				{:else}
-					<svg class="mr-1 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-					</svg>
-					Export Prompt
+					<svg class="mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+					Copy Prompt
 				{/if}
 			</Button>
 
-			<!-- Send to Pi -->
-			<Button size="sm" onclick={handleSendToPi} disabled={annotations.length === 0}>
-				<svg class="mr-1 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-				</svg>
-				Send to Pi ({annotations.length})
+			<Button
+				size="sm"
+				onclick={handleSendToPi}
+				disabled={annotations.length === 0}
+				class="bg-emerald-600 text-xs text-white hover:bg-emerald-500"
+			>
+				<svg class="mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+				Send to Pi{annotations.length > 0 ? ` (${annotations.length})` : ""}
 			</Button>
 		</div>
 	</header>
 
-	<!-- Main layout -->
+	<!-- Main -->
 	<div class="flex min-h-0 flex-1">
-		<!-- Diff panel -->
 		<main class="flex-1 overflow-y-auto">
 			{#if wsState.error}
 				<div class="flex h-full items-center justify-center">
-					<div class="text-center">
-						<svg class="text-destructive mx-auto mb-2 h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-						</svg>
-						<p class="text-destructive text-sm">{wsState.error}</p>
-					</div>
+					<p class="text-destructive text-sm">{wsState.error}</p>
 				</div>
 			{:else if !wsState.diffPayload}
 				<div class="flex h-full items-center justify-center">
 					<div class="flex flex-col items-center gap-3">
-						<div class="border-muted-foreground/30 h-6 w-6 animate-spin rounded-full border-2 border-t-foreground"></div>
-						<p class="text-muted-foreground text-sm">Waiting for diff data…</p>
+						<div class="border-muted h-5 w-5 animate-spin rounded-full border-2 border-t-foreground"></div>
+						<p class="text-muted-foreground text-xs">Waiting for diff data…</p>
 					</div>
 				</div>
 			{:else if wsState.diffPayload.files.length === 0}
 				<div class="flex h-full items-center justify-center">
-					<div class="text-center">
-						<svg class="text-muted-foreground mx-auto mb-2 h-8 w-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
-						<p class="text-muted-foreground text-sm">No changes to review</p>
-					</div>
+					<p class="text-muted-foreground text-sm">No changes to review</p>
 				</div>
 			{:else}
-				<div class="space-y-4 p-4">
+				<div class="space-y-3 p-4">
 					{#each wsState.diffPayload.files as file (file.name)}
 						<div id="file-{file.name}">
 							<DiffViewer
@@ -177,8 +151,8 @@
 			{/if}
 		</main>
 
-		<!-- Right sidebar -->
-		<aside class="border-border bg-card hidden w-72 shrink-0 overflow-y-auto border-l p-4 xl:block">
+		<!-- Sidebar -->
+		<aside class="border-border bg-card hidden w-64 shrink-0 overflow-y-auto border-l p-4 xl:block">
 			{#if wsState.diffPayload}
 				<ChangesSidebar files={wsState.diffPayload.files} onFileClick={scrollToFile} />
 				<Separator class="my-4" />
